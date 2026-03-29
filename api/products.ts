@@ -25,7 +25,12 @@ export default async function handler(req: Request, res: Response) {
       )
     `);
   } catch (e) {
-    console.error("Table creation error:", e);
+    const err = e as Error;
+    console.error("Table creation error:", err);
+    // If it's a connection error, throw it so it's caught by the main catch block
+    if (err.message.includes('connection refused') || err.message.includes('ECONNREFUSED')) {
+      throw err;
+    }
   }
 
   try {
