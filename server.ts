@@ -8,12 +8,21 @@ import categoriesHandler from "./api/categories.js";
 import ordersHandler from "./api/orders.js";
 import deliveryChargesHandler from "./api/delivery-charges.js";
 import sendEmailHandler from "./api/send-email.js";
+import testDbHandler from "./api/test-db.js";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Request logging middleware
+  app.use((req, _res, next) => {
+    if (req.url.startsWith('/api')) {
+      console.log(`[API REQUEST] ${req.method} ${req.url}`);
+    }
+    next();
+  });
 
   // Health check API
   app.get("/api/health", (req, res) => {
@@ -25,11 +34,12 @@ async function startServer() {
   });
 
   // API Routes
-  app.all("/api/products", productsHandler);
-  app.all("/api/categories", categoriesHandler);
-  app.all("/api/orders", ordersHandler);
-  app.all("/api/delivery-charges", deliveryChargesHandler);
-  app.all("/api/send-email", sendEmailHandler);
+  app.use("/api/products", productsHandler);
+  app.use("/api/categories", categoriesHandler);
+  app.use("/api/orders", ordersHandler);
+  app.use("/api/delivery-charges", deliveryChargesHandler);
+  app.use("/api/send-email", sendEmailHandler);
+  app.use("/api/test-db", testDbHandler);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

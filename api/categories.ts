@@ -2,6 +2,16 @@
 import { Request, Response } from 'express';
 import { db } from '../lib/db.js';
 
+const INITIAL_CATEGORIES = [
+  { id: '1', name: 'Facial Kit', slug: 'facial-kit' },
+  { id: '2', name: 'Serum', slug: 'serum' },
+  { id: '3', name: 'Cream', slug: 'cream' },
+  { id: '4', name: 'Cleanser', slug: 'cleanser' },
+  { id: '5', name: 'AI Services', slug: 'ai-services' },
+  { id: '6', name: 'Websites', slug: 'websites' },
+  { id: '7', name: 'Digital Products', slug: 'digital-products' }
+];
+
 export default async function handler(req: Request, res: Response) {
   const { method } = req;
 
@@ -14,10 +24,23 @@ export default async function handler(req: Request, res: Response) {
         slug VARCHAR(255) NOT NULL UNIQUE
       )
     `);
+
+    // Seed if empty
+    const [rows] = await db.execute('SELECT COUNT(*) as count FROM categories');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const count = (rows as any)[0]?.count || 0;
+    if (count === 0) {
+      console.log('[SEED] Seeding initial categories...');
+      for (const cat of INITIAL_CATEGORIES) {
+        await db.execute(
+          'INSERT IGNORE INTO categories (id, name, slug) VALUES (?, ?, ?)',
+          [cat.id, cat.name, cat.slug]
+        );
+      }
+    }
   } catch (e) {
     const err = e as Error;
-    console.error("Table creation error:", err);
-    // If it's a connection error, throw it so it's caught by the main catch block
+    console.error("Table creation/seeding error:", err);
     if (err.message.includes('connection refused') || err.message.includes('ECONNREFUSED')) {
       throw err;
     }
