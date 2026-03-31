@@ -15,6 +15,15 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check API
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: {
+      has_db_host: !!process.env.DB_HOST,
+      has_db_user: !!process.env.DB_USER,
+      has_db_name: !!process.env.DB_NAME
+    }});
+  });
+
   // API Routes
   app.all("/api/products", productsHandler);
   app.all("/api/categories", categoriesHandler);

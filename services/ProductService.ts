@@ -34,48 +34,60 @@ export const ProductService = {
   getCategories: async (): Promise<Category[]> => {
     try {
       const res = await fetch('/api/categories', { cache: 'no-store' });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned ${res.status}`);
+      }
       const data = await res.json();
-      if (data && data.length > 0) return data;
+      if (Array.isArray(data)) return data;
     } catch (e) {
-      console.error("Failed to fetch categories", e);
+      console.error("Failed to fetch categories:", e);
     }
     return INITIAL_CATEGORIES;
   },
 
-  saveCategory: async (category: Category): Promise<void> => {
+  saveCategory: async (category: Category): Promise<boolean> => {
     const id = category.id || Date.now().toString();
     try {
-      await fetch('/api/categories', {
+      const res = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...category, id })
       });
+      return res.ok;
     } catch (e) {
       console.error("Failed to save category", e);
+      return false;
     }
   },
 
-  deleteCategory: async (id: string): Promise<void> => {
+  deleteCategory: async (id: string): Promise<boolean> => {
     try {
-      await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
+      return res.ok;
     } catch (e) {
       console.error("Failed to delete category", e);
+      return false;
     }
   },
 
   getProducts: async (): Promise<Product[]> => {
     try {
       const res = await fetch('/api/products', { cache: 'no-store' });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned ${res.status}`);
+      }
       const data = await res.json();
-      if (data && data.length > 0) {
-        return (data as Product[]).map((p: Product) => ({
+      if (Array.isArray(data)) {
+        return data.map((p: Product) => ({
           ...p,
           image: transformDriveUrl(p.image),
           images: (p.images || []).map(transformDriveUrl)
         }));
       }
     } catch (e) {
-      console.error("Failed to fetch products", e);
+      console.error("Failed to fetch products:", e);
     }
     return INITIAL_PRODUCTS.map(p => ({
       ...p,
@@ -84,7 +96,7 @@ export const ProductService = {
     }));
   },
 
-  saveProduct: async (product: Product): Promise<void> => {
+  saveProduct: async (product: Product): Promise<boolean> => {
     const id = product.id || Date.now().toString();
     const newProduct = {
       ...product,
@@ -97,21 +109,25 @@ export const ProductService = {
     };
 
     try {
-      await fetch('/api/products', {
+      const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProduct)
       });
+      return res.ok;
     } catch (e) {
       console.error("Failed to save product", e);
+      return false;
     }
   },
 
-  deleteProduct: async (id: string): Promise<void> => {
+  deleteProduct: async (id: string): Promise<boolean> => {
     try {
-      await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      return res.ok;
     } catch (e) {
       console.error("Failed to delete product", e);
+      return false;
     }
   },
 
@@ -128,15 +144,17 @@ export const ProductService = {
     }
   },
 
-  saveDeliveryCharges: async (charges: DeliveryCharge[]): Promise<void> => {
+  saveDeliveryCharges: async (charges: DeliveryCharge[]): Promise<boolean> => {
     try {
-      await fetch('/api/delivery-charges', {
+      const res = await fetch('/api/delivery-charges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(charges)
       });
+      return res.ok;
     } catch (e) {
       console.error("Failed to save delivery charges", e);
+      return false;
     }
   }
 };
@@ -145,36 +163,45 @@ export const OrderService = {
   getOrders: async (): Promise<Order[]> => {
     try {
       const res = await fetch('/api/orders', { cache: 'no-store' });
-      if (!res.ok) throw new Error("API failed");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned ${res.status}`);
+      }
       return await res.json();
     } catch (e) {
-      console.error("Failed to fetch orders", e);
+      console.error("Failed to fetch orders:", e);
       return [];
     }
   },
 
-  saveOrder: async (order: Order): Promise<void> => {
+  saveOrder: async (order: Order): Promise<boolean> => {
     try {
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(order)
       });
-      console.log(`[DB SYNC] Order ${order.id} persisted to MySQL.`);
+      if (res.ok) {
+        console.log(`[DB SYNC] Order ${order.id} persisted to MySQL.`);
+      }
+      return res.ok;
     } catch (err) {
       console.error('[DB SYNC ERROR] Failed to save order to MySQL.', err);
+      return false;
     }
   },
 
-  updateOrderStatus: async (id: string, status: OrderStatus): Promise<void> => {
+  updateOrderStatus: async (id: string, status: OrderStatus): Promise<boolean> => {
     try {
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: id, status })
       });
+      return res.ok;
     } catch (err) {
       console.error('[DB UPDATE ERROR] MySQL status update failed.', err);
+      return false;
     }
   },
 

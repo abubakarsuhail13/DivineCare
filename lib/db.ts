@@ -1,5 +1,5 @@
 
-import mysql from 'mysql2/promise';
+import * as mysql from 'mysql2/promise';
 
 /**
  * Database connection pool for Divine Beauty MySQL.
@@ -32,34 +32,34 @@ if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
   console.error(`[DATABASE ERROR] Missing environment variables: ${missingVars.join(', ')}. Connection will likely fail with ECONNREFUSED 127.0.0.1:3306.`);
 }
 
-export const db = mysql.createPool(poolConfig);
+const pool = mysql.createPool(poolConfig);
 
-// Wrap pool methods to provide better error messages for connection issues
-const originalExecute = db.execute.bind(db);
-const originalQuery = db.query.bind(db);
-
-(db as any).execute = async (sql: string, params?: any) => {
-  try {
-    return await originalExecute(sql, params);
-  } catch (error) {
-    const err = error as Error;
-    if (err.message.includes('ECONNREFUSED')) {
-      throw new Error('Database connection refused. Please ensure DB_HOST, DB_USER, DB_PASS, and DB_NAME are correctly set in the Settings menu of AI Studio.');
+// Provide a wrapped db object with better error handling
+export const db = {
+  execute: async (sql: string, params?: unknown[]) => {
+    try {
+      return await pool.execute(sql, params);
+    } catch (error) {
+      const err = error as Error;
+      if (err.message.includes('ECONNREFUSED')) {
+        throw new Error('Database connection refused. Please ensure DB_HOST, DB_USER, DB_PASS, and DB_NAME are correctly set in the Settings menu of AI Studio.');
+      }
+      throw error;
     }
-    throw error;
-  }
-};
-
-(db as any).query = async (sql: string, params?: any) => {
-  try {
-    return await originalQuery(sql, params);
-  } catch (error) {
-    const err = error as Error;
-    if (err.message.includes('ECONNREFUSED')) {
-      throw new Error('Database connection refused. Please ensure DB_HOST, DB_USER, DB_PASS, and DB_NAME are correctly set in the Settings menu of AI Studio.');
+  },
+  query: async (sql: string, params?: unknown[]) => {
+    try {
+      return await pool.query(sql, params);
+    } catch (error) {
+      const err = error as Error;
+      if (err.message.includes('ECONNREFUSED')) {
+        throw new Error('Database connection refused. Please ensure DB_HOST, DB_USER, DB_PASS, and DB_NAME are correctly set in the Settings menu of AI Studio.');
+      }
+      throw error;
     }
-    throw error;
-  }
+  },
+  // Expose the raw pool if needed
+  pool
 };
 
 export default db;

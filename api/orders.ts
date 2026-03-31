@@ -10,6 +10,29 @@ import { db } from '../lib/db.js';
 export default async function handler(req: Request, res: Response) {
   const { method } = req;
 
+  // Ensure table exists
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(255) PRIMARY KEY,
+        customerName VARCHAR(255) NOT NULL,
+        customerEmail VARCHAR(255) NOT NULL,
+        shippingAddress TEXT,
+        total DECIMAL(10, 2),
+        status VARCHAR(50),
+        date DATETIME,
+        items JSON,
+        paymentMethod VARCHAR(50)
+      )
+    `);
+  } catch (e) {
+    const err = e as Error;
+    console.error("Table creation error:", err);
+    if (err.message.includes('connection refused') || err.message.includes('ECONNREFUSED')) {
+      throw err;
+    }
+  }
+
   try {
     switch (method) {
       case 'GET': {

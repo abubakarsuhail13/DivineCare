@@ -60,11 +60,27 @@ const AdminDashboard: React.FC = () => {
   // Notification State
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmText?: string;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   // Modals
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -115,24 +131,32 @@ const AdminDashboard: React.FC = () => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
 
-    OrderService.updateOrderStatus(id, newStatus as OrderStatus);
-    refreshData();
+    setIsProcessing(true);
+    const success = await OrderService.updateOrderStatus(id, newStatus as OrderStatus);
+    
+    if (success) {
+      await refreshData();
+      showToast('success', `Order status updated to ${newStatus}.`);
 
-    // Automated Email Notifications
-    if (newStatus === 'Preparing' || newStatus === 'Delivered') {
-      const emailResult = await sendOrderStatusEmail(order, newStatus as OrderStatus);
-      if (emailResult.success) {
-        showToast('success', `Customer notified: Order is now ${newStatus === 'Preparing' ? 'Preparing Ritual' : 'Delivered'}.`);
-      } else {
-        showToast('error', `Status updated locally, but email notification failed.`);
+      // Automated Email Notifications
+      if (newStatus === 'Preparing' || newStatus === 'Delivered') {
+        const emailResult = await sendOrderStatusEmail(order, newStatus as OrderStatus);
+        if (emailResult.success) {
+          showToast('success', `Customer notified: Order is now ${newStatus === 'Preparing' ? 'Preparing Ritual' : 'Delivered'}.`);
+        } else {
+          showToast('error', `Status updated, but email notification failed.`);
+        }
       }
+    } else {
+      showToast('error', 'Failed to update order status.');
     }
+    setIsProcessing(false);
   };
 
   // --- Export Functions ---
   const handleExportCSV = () => {
     if (orders.length === 0) {
-      alert("No orders to export.");
+      showToast('error', "No orders to export.");
       return;
     }
     const headers = ["Order ID", "Date", "Customer Name", "Email", "Shipping Address", "Total (PKR)", "Status", "Payment Method", "Items"];
@@ -167,13 +191,13 @@ const AdminDashboard: React.FC = () => {
 
   const handleExportPDF = () => {
     if (orders.length === 0) {
-      alert("No orders to export.");
+      showToast('error', "No orders to export.");
       return;
     }
     
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
     if (!printWindow) {
-      alert("Please allow pop-ups to export as PDF.");
+      showToast('error', "Please allow pop-ups to export as PDF.");
       return;
     }
     
@@ -296,67 +320,132 @@ const AdminDashboard: React.FC = () => {
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isUploading) return;
+    if (isUploading || isProcessing) return;
     
-    await ProductService.saveProduct({
+    setIsProcessing(true);
+    const success = await ProductService.saveProduct({
       ...(productForm as Product),
       id: editingProduct?.id || ''
     });
-    await refreshData();
-    setIsProductModalOpen(false);
+
+    if (success) {
+      await refreshData();
+      setIsProductModalOpen(false);
+      showToast('success', `Product ${editingProduct ? 'updated' : 'created'} successfully.`);
+    } else {
+      showToast('error', `Failed to ${editingProduct ? 'update' : 'create'} product.`);
+    }
+    setIsProcessing(false);
   };
 
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing) return;
+
+    setIsProcessing(true);
     const slug = categoryForm.slug || categoryForm.name?.toLowerCase().replace(/\s+/g, '-');
-    await ProductService.saveCategory({
+    const success = await ProductService.saveCategory({
       ...(categoryForm as Category),
       slug: slug || '',
       id: editingCategory?.id || ''
     });
-    await refreshData();
-    setIsCategoryModalOpen(false);
-  };
 
-  const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('Remove this product permanently?')) {
-      await ProductService.deleteProduct(id);
+    if (success) {
       await refreshData();
+      setIsCategoryModalOpen(false);
+      showToast('success', `Category ${editingCategory ? 'updated' : 'created'} successfully.`);
+    } else {
+      showToast('error', `Failed to ${editingCategory ? 'update' : 'create'} category.`);
     }
+    setIsProcessing(false);
   };
 
-  const handleDeleteCategory = async (id: string) => {
-    if (window.confirm('Delete this category? Products in this category may become unlisted.')) {
-      await ProductService.deleteCategory(id);
-      await refreshData();
-    }
+  const handleDeleteProduct = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remove Product',
+      message: 'Are you sure you want to permanently remove this product from the divine collection?',
+      confirmText: 'Remove Product',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsProcessing(true);
+        const success = await ProductService.deleteProduct(id);
+        if (success) {
+          await refreshData();
+          showToast('success', 'Product removed successfully.');
+        } else {
+          showToast('error', 'Failed to remove product.');
+        }
+        setIsProcessing(false);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
-  const handleDeleteReview = async (reviewId: string) => {
+  const handleDeleteCategory = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Category',
+      message: 'Are you sure you want to delete this category? Products in this category may become unlisted.',
+      confirmText: 'Delete Category',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsProcessing(true);
+        const success = await ProductService.deleteCategory(id);
+        if (success) {
+          await refreshData();
+          showToast('success', 'Category deleted successfully.');
+        } else {
+          showToast('error', 'Failed to delete category.');
+        }
+        setIsProcessing(false);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleDeleteReview = (reviewId: string) => {
     if (!reviewProduct) return;
-    if (window.confirm('Are you sure you want to permanently delete this review?')) {
-      const updatedReviews = (reviewProduct.reviews || []).filter(r => r.id !== reviewId);
-      const newRating = updatedReviews.length > 0 
-        ? updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length 
-        : 5; 
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Review',
+      message: 'Are you sure you want to permanently delete this review?',
+      confirmText: 'Delete Review',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsProcessing(true);
+        const updatedReviews = (reviewProduct.reviews || []).filter(r => r.id !== reviewId);
+        const newRating = updatedReviews.length > 0 
+          ? updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length 
+          : 5; 
+          
+        const updatedProduct = {
+          ...reviewProduct,
+          reviews: updatedReviews,
+          reviewsCount: updatedReviews.length,
+          rating: newRating
+        };
         
-      const updatedProduct = {
-        ...reviewProduct,
-        reviews: updatedReviews,
-        reviewsCount: updatedReviews.length,
-        rating: newRating
-      };
-      
-      await ProductService.saveProduct(updatedProduct);
-      setReviewProduct(updatedProduct);
-      await refreshData();
-    }
+        const success = await ProductService.saveProduct(updatedProduct);
+        if (success) {
+          setReviewProduct(updatedProduct);
+          await refreshData();
+          showToast('success', 'Review deleted successfully.');
+        } else {
+          showToast('error', 'Failed to delete review.');
+        }
+        setIsProcessing(false);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleAddDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCity.trim() || newCharge === '') return;
+    if (!newCity.trim() || newCharge === '' || isProcessing) return;
     
+    setIsProcessing(true);
     const newLocation: DeliveryCharge = {
       id: Date.now().toString(),
       city: newCity.trim(),
@@ -364,18 +453,39 @@ const AdminDashboard: React.FC = () => {
     };
     
     const updated = [...deliveryCharges, newLocation];
-    await ProductService.saveDeliveryCharges(updated);
-    setDeliveryCharges(updated);
-    setNewCity('');
-    setNewCharge('');
+    const success = await ProductService.saveDeliveryCharges(updated);
+    if (success) {
+      setDeliveryCharges(updated);
+      setNewCity('');
+      setNewCharge('');
+      showToast('success', 'Delivery location added.');
+    } else {
+      showToast('error', 'Failed to add delivery location.');
+    }
+    setIsProcessing(false);
   };
 
-  const handleDeleteDelivery = async (id: string) => {
-    if (window.confirm('Delete this delivery location?')) {
-      const updated = deliveryCharges.filter(d => d.id !== id);
-      await ProductService.saveDeliveryCharges(updated);
-      setDeliveryCharges(updated);
-    }
+  const handleDeleteDelivery = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Location',
+      message: 'Are you sure you want to delete this delivery location?',
+      confirmText: 'Delete Location',
+      isDestructive: true,
+      onConfirm: async () => {
+        setIsProcessing(true);
+        const updated = deliveryCharges.filter(d => d.id !== id);
+        const success = await ProductService.saveDeliveryCharges(updated);
+        if (success) {
+          setDeliveryCharges(updated);
+          showToast('success', 'Delivery location removed.');
+        } else {
+          showToast('error', 'Failed to remove delivery location.');
+        }
+        setIsProcessing(false);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -477,6 +587,49 @@ const AdminDashboard: React.FC = () => {
               <p className="text-xs mt-1">{notification.message}</p>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isProcessing && setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-brand-charcoal/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white w-full max-w-md p-8 rounded-sm shadow-2xl border border-brand-pink"
+            >
+              <h3 className="text-xl font-serif mb-4">{confirmModal.title}</h3>
+              <p className="text-sm text-brand-charcoal/70 mb-8 leading-relaxed">{confirmModal.message}</p>
+              <div className="flex gap-4">
+                <button 
+                  disabled={isProcessing}
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 px-6 py-3 border border-brand-pink text-[10px] uppercase tracking-widest font-bold hover:bg-brand-cream transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  disabled={isProcessing}
+                  onClick={confirmModal.onConfirm}
+                  className={`flex-1 px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal.isDestructive ? 'bg-red-500 hover:bg-red-600' : 'bg-brand-gold hover:brightness-110'}`}
+                >
+                  {isProcessing ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    confirmModal.confirmText || 'Confirm'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

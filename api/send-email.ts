@@ -197,7 +197,7 @@ export default async function handler(req: Request, res: Response) {
     
     let errorMessage = err.message;
     if (errorMessage.includes('ECONNREFUSED')) {
-      errorMessage = 'Database connection refused. Please ensure DB_HOST, DB_USER, DB_PASS, and DB_NAME are correctly set in the Settings menu.';
+      errorMessage = 'Email server connection refused. Please ensure EMAIL_HOST, EMAIL_USER, and EMAIL_PASS are correctly set in the Settings menu.';
     }
 
     return res.status(500).json({ 
