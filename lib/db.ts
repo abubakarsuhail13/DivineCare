@@ -36,7 +36,8 @@ const pool = mysql.createPool(poolConfig);
 
 // Provide a wrapped db object with better error handling
 export const db = {
-  execute: async (sql: string, params?: unknown[]) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute: async (sql: string, params?: any[]) => {
     try {
       return await pool.execute(sql, params);
     } catch (error) {
@@ -47,7 +48,8 @@ export const db = {
       throw error;
     }
   },
-  query: async (sql: string, params?: unknown[]) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: async (sql: string, params?: any[]) => {
     try {
       return await pool.query(sql, params);
     } catch (error) {
