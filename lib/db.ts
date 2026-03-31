@@ -38,7 +38,7 @@ export const db = mysql.createPool(poolConfig);
 const originalExecute = db.execute.bind(db);
 const originalQuery = db.query.bind(db);
 
-db.execute = async (sql: string, params?: any) => {
+(db as any).execute = async (sql: string, params?: any) => {
   try {
     return await originalExecute(sql, params);
   } catch (error) {
@@ -48,9 +48,9 @@ db.execute = async (sql: string, params?: any) => {
     }
     throw error;
   }
-} as any;
+};
 
-db.query = async (sql: string, params?: any) => {
+(db as any).query = async (sql: string, params?: any) => {
   try {
     return await originalQuery(sql, params);
   } catch (error) {
@@ -60,6 +60,6 @@ db.query = async (sql: string, params?: any) => {
     }
     throw error;
   }
-} as any;
+};
 
 export default db;
